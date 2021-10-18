@@ -30,7 +30,7 @@ public class Application implements CommandLineRunner {
     private Account2FeignClient account2FeignClient;
 
 
-    private ConcurrentMap<String, ResponseEntity<Account>> createdAccounts = new ConcurrentHashMap<>();
+    private ConcurrentMap<String, Object> createdAccounts = new ConcurrentHashMap<>();
 
     public static void main(String[] args) {
         SpringApplication application = new SpringApplication(Application.class);
@@ -62,8 +62,9 @@ public class Application implements CommandLineRunner {
         return IntStream.range(0, NUMBER_OF_THREADS)
                 .mapToObj(n -> () -> {
                     try {
-                        final ResponseEntity<Account> accountResponseEntity = feignClient.create(Account.builder().owner(ownerName + getRandom()).value((double) n).build());
-                        createdAccounts.put(ownerName+n, accountResponseEntity);
+                        final String randomOwnerName = ownerName + getRandom();
+                        feignClient.create(Account.builder().owner(randomOwnerName).value((double) n).build());
+                        createdAccounts.put(randomOwnerName, new Object());
                     }catch(Exception e){
                         log.error("Error al crear account", e);
                     }

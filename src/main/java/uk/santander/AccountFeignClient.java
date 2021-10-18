@@ -13,7 +13,6 @@ public interface AccountFeignClient {@PostMapping(produces = MediaType.APPLICATI
         consumes = MediaType.APPLICATION_JSON_VALUE)
 ResponseEntity<Account> create(@RequestBody Account account);
 
-    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE,
-            consumes = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<List<Account>> get(@RequestParam String owner);
 }
