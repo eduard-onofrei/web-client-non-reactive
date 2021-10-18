@@ -3,7 +3,15 @@ uk/santander/Caller.java
 uk/santander/Account.java
  uk.santander.Account
  uk.santander.Account$AccountBuilder
-uk/santander/AppConfig.java
- uk.santander.AppConfig
+uk/santander/AccountFeignClient.java
+ uk.santander.AccountFeignClient
 uk/santander/Application.java
  uk.santander.Application
+uk/santander/FeignConfig.java
+ uk.santander.FeignConfig
+uk/santander/Account1FeignClient.java
+ uk.santander.Account1FeignClient
+uk/santander/FeignClientsConfig.java
+ uk.santander.FeignClientsConfig
+uk/santander/Account2FeignClient.java
+ uk.santander.Account2FeignClient

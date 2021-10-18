@@ -7,21 +7,13 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -29,12 +21,14 @@ import java.util.stream.Stream;
 @SpringBootApplication
 public class Application implements CommandLineRunner {
 
-    private static final String SERVICE1 = "http://localhost:8080";
-    private static final String SERVICE2 = "http://localhost:8085";
-    private static final int NUMBER_OF_THREADS = 100;
+    private static final int NUMBER_OF_THREADS = 2000;
 
     @Autowired
-    private WebClient webClient;
+    private Account1FeignClient account1FeignClient;
+
+    @Autowired
+    private Account2FeignClient account2FeignClient;
+
 
     private ConcurrentMap<String, ResponseEntity<Account>> createdAccounts = new ConcurrentHashMap<>();
 
@@ -48,38 +42,31 @@ public class Application implements CommandLineRunner {
     public void run(String... args) throws Exception {
         long t0 = System.currentTimeMillis();
         initialLoad();
-        log.info("Created {}", createdAccounts);
         log.info("Initial load duration: {}", System.currentTimeMillis()-t0);
-        process();
+        process(account1FeignClient);
+        process(account2FeignClient);
         log.info("Tiempo total de ejecución: {}", System.currentTimeMillis()- t0);
     }
 
     private void initialLoad() throws InterruptedException {
         ExecutorService executor = Executors.newFixedThreadPool(2*NUMBER_OF_THREADS);
 
-        Stream.concat(createCallers(SERVICE1, "Pepe"), createCallers(SERVICE2, "Juan"))
-            .forEach(task -> {
-                executor.submit(task);
-                executor.shutdown();
-            });
-        final boolean allRequestsFinished = executor.awaitTermination(30, TimeUnit.SECONDS);
+        Stream.concat(createCallers(account1FeignClient, "Pepe"), createCallers(account2FeignClient, "Juan"))
+            .forEach(executor::submit);
+        executor.shutdown();
+        final boolean allRequestsFinished = executor.awaitTermination(90, TimeUnit.SECONDS);
         log.info("AllRequestsFinished: {}", allRequestsFinished);
     }
 
-    private Stream<Runnable> createCallers(String host, String ownerName) {
-        return IntStream.range(0, NUMBER_OF_THREADS).parallel()
+    private Stream<Runnable> createCallers(AccountFeignClient feignClient, String ownerName) {
+        return IntStream.range(0, NUMBER_OF_THREADS)
                 .mapToObj(n -> () -> {
-                    final ResponseEntity<Account> accountResponseEntity = webClient.post()
-                            .uri(host)
-                            .bodyValue(Account.builder().owner(ownerName + getRandom()).value((double) n).build())
-                            .retrieve()
-                            .toEntity(Account.class)
-                            .map(peekedAccount -> {
-                                log.info(peekedAccount.toString());
-                                return peekedAccount;
-                            })
-                            .block();
-                    createdAccounts.put(ownerName+n, accountResponseEntity);
+                    try {
+                        final ResponseEntity<Account> accountResponseEntity = feignClient.create(Account.builder().owner(ownerName + getRandom()).value((double) n).build());
+                        createdAccounts.put(ownerName+n, accountResponseEntity);
+                    }catch(Exception e){
+                        log.error("Error al crear account", e);
+                    }
                 });
     }
 
@@ -88,16 +75,12 @@ public class Application implements CommandLineRunner {
         return rn.nextInt(5) + 1;
     }
 
-    private void process() {
-        final List<Flux<Account>> accountMonoList = createdAccounts.keySet().stream()
+    private void process(AccountFeignClient feignClient) {
+        createdAccounts.keySet().stream()
                 .parallel()
-                .map(owner -> webClient.get()
-                        .uri(SERVICE1 + "?owner=" + owner)
-                        .retrieve()
-                        .bodyToFlux(Account.class)
-                        .flatMap(account -> webClient.post().uri(SERVICE1) //todo loguear
-                                .bodyValue(account.toBuilder().owner(account.getOwner() + "new").build()).retrieve().bodyToMono(Account.class)))
-                .collect(Collectors.toList());
-        Flux.fromIterable(accountMonoList).flatMap(Function.identity()).blockLast();
+                .forEach(owner ->
+                        feignClient.get(owner).getBody()
+                        .forEach(account -> feignClient.create(account.toBuilder().owner(account.getOwner() + "new"+feignClient.getClass().toString()).build())));
+
     }
 }
